@@ -21,6 +21,7 @@ Free, self-hosted team video meetings — **unlimited length**, **full-meeting r
 | ⏺️ Recording | Composite of all participants + mixed audio, streamed **directly to disk** – 3 hours+ is fine |
 | 📝 Live transcript | Every participant is transcribed with their name; export **TXT / SRT / JSON** |
 | 💬 Chat, ✋ raise hand, 👥 people list | Speaking indicator, unread badges |
+| 🛡️ Host controls | First person in is host: **approve** who joins (waiting room, on by default), **remove** anyone, **lock** the meeting. Host role passes to the next person if the host leaves |
 | 🔗 Invite links | `https://your-host/r/room-code` |
 | 💸 Cost | **0** — no media server, no paid APIs |
 

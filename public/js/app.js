@@ -39,6 +39,12 @@ const state = {
   quality: localStorage.getItem('tm.quality') || '720',
   /** @type {Map<string, PeerUI>} */
   peers: new Map(),
+  // host controls
+  hostId: null,
+  locked: false,
+  approval: true,
+  /** @type {Map<string, {name:string}>} people waiting to be admitted (host only) */
+  waiting: new Map(),
   meters: new Map(),
   unread: 0,
   sideTab: null,
@@ -256,6 +262,18 @@ async function join() {
   state.socket.on('chat', onChat);
   state.socket.on('caption', onCaption);
   state.socket.on('state', onPeerState);
+  // Host controls / waiting room
+  state.socket.on('admitted', (res) => onJoined({ ok: true, ...res }, ice));
+  state.socket.on('denied', ({ by }) => { resetJoinButton(); showLobbyError(`${by || 'The host'} did not let you in.`); });
+  state.socket.on('kicked', onKicked);
+  state.socket.on('knock', onKnock);
+  state.socket.on('knock-cancel', ({ id }) => { state.waiting.delete(id); renderPeople(); dismissKnock(id); });
+  state.socket.on('room-info', onRoomInfo);
+}
+
+function resetJoinButton() {
+  $('#btnJoin').disabled = false;
+  $('#btnJoin').textContent = 'Join meeting';
 }
 
 function onConnected(iceServers) {
@@ -265,34 +283,115 @@ function onConnected(iceServers) {
     state.mesh.close();
     for (const id of [...state.peers.keys()]) if (id !== 'me') removePeerUI(id);
   }
-  state.socket.emit('join', { room: state.room, name: state.name }, (res) => {
-    if (res.error) {
-      showLobbyError(res.error);
-      $('#btnJoin').disabled = false;
-      $('#btnJoin').textContent = 'Join meeting';
-      state.socket.disconnect();
-      return;
-    }
-    state.myId = res.id;
-    state.startedAt = state.startedAt || res.startedAt;
-    state.mesh = new Mesh({
-      socket: state.socket,
-      myId: state.myId,
-      iceServers,
-      localStream: state.local,
-      maxVideoBitrate: QUALITY[state.quality].bitrate,
-      onStream: onRemoteStream,
-      onPeerLeft: removePeerUI,
-      onConnection: (id, s) => state.peers.get(id)?.tile.classList.toggle('connecting', s !== 'connected'),
-    });
-    for (const p of res.peers) {
-      addPeerUI(p.id, p.name);
-      state.mesh.addPeer(p.id, p.name);
-    }
-    if (!rejoin) enterMeeting();
-    else toast('Reconnected', 'success');
-    broadcastState();
+  state.socket.emit('join', { room: state.room, name: state.name }, (res) => onJoined(res, iceServers));
+}
+
+function onJoined(res, iceServers) {
+  if (res.error) {
+    resetJoinButton();
+    showLobbyError(res.error);
+    state.socket.disconnect();
+    return;
+  }
+  if (res.waiting) {
+    // Host has to let us in first.
+    hideLobbyError();
+    $('#btnJoin').textContent = `Waiting for ${res.hostName || 'the host'} to let you in…`;
+    return;
+  }
+  const rejoin = !!state.mesh;
+  state.myId = res.id;
+  state.startedAt = state.startedAt || res.startedAt;
+  state.mesh = new Mesh({
+    socket: state.socket,
+    myId: state.myId,
+    iceServers,
+    localStream: state.local,
+    maxVideoBitrate: QUALITY[state.quality].bitrate,
+    onStream: onRemoteStream,
+    onPeerLeft: removePeerUI,
+    onConnection: (id, s) => state.peers.get(id)?.tile.classList.toggle('connecting', s !== 'connected'),
   });
+  for (const p of res.peers) {
+    addPeerUI(p.id, p.name);
+    state.mesh.addPeer(p.id, p.name);
+  }
+  if (!rejoin) enterMeeting();
+  else toast('Reconnected', 'success');
+  onRoomInfo(res);
+  broadcastState();
+}
+
+/* ------------------------------------------------------ host controls */
+
+const isHost = () => state.hostId && state.hostId === state.myId;
+
+function onRoomInfo({ hostId, locked, approval }) {
+  const wasHost = isHost();
+  if (hostId !== undefined) state.hostId = hostId;
+  if (locked !== undefined) state.locked = locked;
+  if (approval !== undefined) state.approval = approval;
+  if (!wasHost && isHost() && state.peers.size > 1) toast('You are now the host', 'info');
+  renderPeople();
+}
+
+function onKnock({ id, name }) {
+  state.waiting.set(id, { name });
+  renderPeople();
+  // Toast with Admit / Deny so the host can react without opening the panel.
+  const el = document.createElement('div');
+  el.className = 'toast warn knock';
+  el.dataset.knock = id;
+  el.innerHTML = `<b>${escapeHtml(name)}</b> wants to join
+    <div class="actions">
+      <button class="btn primary tiny" data-act="admit">Admit</button>
+      <button class="btn ghost tiny" data-act="deny">Deny</button>
+    </div>`;
+  el.querySelector('[data-act="admit"]').onclick = () => admitPeer(id, true);
+  el.querySelector('[data-act="deny"]').onclick = () => admitPeer(id, false);
+  $('#toasts').appendChild(el);
+  try { knockSound(); } catch { /* audio not ready */ }
+}
+
+function dismissKnock(id) {
+  $(`#toasts [data-knock="${id}"]`)?.remove();
+}
+
+function admitPeer(id, allow) {
+  state.socket.emit('admit', { id, allow });
+  state.waiting.delete(id);
+  dismissKnock(id);
+  renderPeople();
+}
+
+function kickPeer(id) {
+  const p = state.peers.get(id);
+  if (!p || !confirm(`Remove ${p.name} from the meeting?`)) return;
+  state.socket.emit('kick', { id });
+}
+
+function onKicked({ by }) {
+  state.transcriber?.stop();
+  if (state.recorder?.active) stopRecording();
+  state.mesh?.close();
+  state.local?.getTracks().forEach((t) => t.stop());
+  state.screenTrack?.stop();
+  alert(`${by || 'The host'} removed you from the meeting.`);
+  location.href = `/r/${encodeURIComponent(state.room)}`;
+}
+
+function knockSound() {
+  const ctx = state.audioCtx;
+  if (!ctx) return;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.frequency.value = 880;
+  g.gain.setValueAtTime(0.0001, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+  o.connect(g).connect(ctx.destination);
+  o.start();
+  o.stop(ctx.currentTime + 0.45);
 }
 
 function enterMeeting() {
@@ -431,20 +530,61 @@ function relayout() {
 }
 
 function renderPeople() {
+  const host = isHost();
+
+  // Host bar: lock + approval toggles (host only), or a status line for everyone else.
+  const bar = $('#hostBar');
+  if (host) {
+    bar.classList.remove('hidden');
+    bar.innerHTML = `
+      <span class="host-tag">You are the host</span>
+      <label class="switch"><input type="checkbox" id="swApproval" ${state.approval ? 'checked' : ''}> Approve new people</label>
+      <label class="switch"><input type="checkbox" id="swLock" ${state.locked ? 'checked' : ''}> Lock meeting</label>`;
+    $('#swApproval').onchange = (e) => { state.approval = e.target.checked; state.socket.emit('approval', { enabled: state.approval }); };
+    $('#swLock').onchange = (e) => { state.locked = e.target.checked; state.socket.emit('lock', { locked: state.locked }); };
+  } else if (state.locked) {
+    bar.classList.remove('hidden');
+    bar.innerHTML = '<span class="host-tag">🔒 Meeting locked by host</span>';
+  } else bar.classList.add('hidden');
+
+  // Waiting room (host only)
+  const wl = $('#waitingList');
+  wl.innerHTML = '';
+  if (host && state.waiting.size) {
+    wl.classList.remove('hidden');
+    wl.innerHTML = `<div class="section-title">Waiting to join (${state.waiting.size})</div>`;
+    for (const [id, w] of state.waiting) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="av" style="background:${colorFor(id)}">${initials(w.name)}</span>
+        <span class="pn">${escapeHtml(w.name)}</span>
+        <span class="st">
+          <button class="btn primary tiny" data-admit="1">Admit</button>
+          <button class="btn ghost tiny" data-admit="0">Deny</button>
+        </span>`;
+      li.querySelector('[data-admit="1"]').onclick = () => admitPeer(id, true);
+      li.querySelector('[data-admit="0"]').onclick = () => admitPeer(id, false);
+      wl.appendChild(li);
+    }
+  } else wl.classList.add('hidden');
+
   const ul = $('#peopleList');
   ul.innerHTML = '';
   for (const [id, p] of state.peers) {
+    const realId = id === 'me' ? state.myId : id;
     const li = document.createElement('li');
     li.innerHTML = `
       <span class="av" style="background:${colorFor(id === 'me' ? state.name : id)}">${initials(p.name)}</span>
-      <span class="pn">${escapeHtml(p.name)}${id === 'me' ? '<small>you</small>' : ''}</span>
+      <span class="pn">${escapeHtml(p.name)}${id === 'me' ? '<small>you</small>' : ''}${realId === state.hostId ? '<small class="host">host</small>' : ''}</span>
       <span class="st">
         ${p.hand ? '✋' : ''}
         ${p.recording ? '<svg class="rec"><use href="#i-record"/></svg>' : ''}
         ${p.screen ? '<svg><use href="#i-screen"/></svg>' : ''}
         <svg class="${p.audio ? '' : 'off'}"><use href="#${p.audio ? 'i-mic' : 'i-mic-off'}"/></svg>
         <svg class="${p.video ? '' : 'off'}"><use href="#${p.video ? 'i-video' : 'i-video-off'}"/></svg>
+        ${host && id !== 'me' ? '<button class="btn ghost tiny kick" title="Remove from meeting"><svg><use href="#i-x"/></svg>Remove</button>' : ''}
       </span>`;
+    li.querySelector('.kick')?.addEventListener('click', () => kickPeer(id));
     ul.appendChild(li);
   }
 }

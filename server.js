@@ -130,8 +130,45 @@ const rooms = new Map();
 // Strip control characters, trim and cap length.
 const clean = (v, max) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
 
+/* ------------------------------------------------------------ room helpers */
+
+function getRoom(name) {
+  let info = rooms.get(name);
+  if (!info) {
+    info = { members: new Map(), waiting: new Map(), hostId: null, locked: false, approval: true, startedAt: Date.now() };
+    rooms.set(name, info);
+  }
+  return info;
+}
+
+const roomInfo = (info) => ({ hostId: info.hostId, locked: info.locked, approval: info.approval });
+
+function joinPayload(socket, info) {
+  const peers = [...info.members].filter(([id]) => id !== socket.id).map(([id, m]) => ({ id, name: m.name }));
+  return { id: socket.id, peers, startedAt: info.startedAt, ...roomInfo(info) };
+}
+
+/** Add a socket to its room's members and announce it to the others. */
+function admit(socket) {
+  const room = socket.data.room;
+  const info = rooms.get(room);
+  if (!info) return;
+  info.waiting.delete(socket.id);
+  socket.data.waiting = false;
+  socket.join(room);
+  info.members.set(socket.id, { name: socket.data.name, joinedAt: Date.now() });
+  if (!info.hostId) info.hostId = socket.id; // first person in becomes host
+  socket.to(room).emit('peer-joined', { id: socket.id, name: socket.data.name });
+  console.log(`[join] ${socket.data.name} -> ${room} (${info.members.size} in room)`);
+}
+
+function isHost(socket) {
+  const info = socket.data.room && rooms.get(socket.data.room);
+  return !!info && info.hostId === socket.id;
+}
+
 io.on('connection', (socket) => {
-  let room = null;
+  socket.data.room = null;
 
   socket.on('join', (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
@@ -139,79 +176,157 @@ io.on('connection', (socket) => {
     const name = clean(payload?.name, 40) || 'Guest';
     if (!r) return reply({ error: 'Room code required' });
 
-    // Leaving a previous room (e.g. on reconnect) is handled by the disconnect path.
-    if (room) leave();
+    if (socket.data.room) leave();
 
-    const members = rooms.get(r) || new Map();
-    if (members.size >= MAX_PEERS) return reply({ error: `Room is full (max ${MAX_PEERS} people)` });
+    const info = getRoom(r);
+    if (info.members.size + info.waiting.size >= MAX_PEERS) return reply({ error: `Room is full (max ${MAX_PEERS} people)` });
+    if (info.locked) return reply({ error: 'This meeting is locked by the host' });
 
-    room = r;
+    socket.data.room = r;
     socket.data.name = name;
-    socket.join(room);
 
-    const peers = [...members].map(([id, m]) => ({ id, name: m.name }));
-    const now = Date.now();
-    const startedAt = Math.min(now, ...[...members.values()].map((m) => m.joinedAt));
-    members.set(socket.id, { name, joinedAt: now });
-    rooms.set(room, members);
-
-    reply({ ok: true, id: socket.id, peers, startedAt });
-    socket.to(room).emit('peer-joined', { id: socket.id, name });
-    console.log(`[join] ${name} -> ${room} (${members.size} in room)`);
+    // Everyone after the host waits to be admitted (unless the host turned approval off).
+    const hostSocket = info.hostId && io.sockets.sockets.get(info.hostId);
+    if (info.approval && hostSocket) {
+      info.waiting.set(socket.id, { name, since: Date.now() });
+      socket.data.waiting = true;
+      hostSocket.emit('knock', { id: socket.id, name });
+      reply({ waiting: true, id: socket.id, hostName: hostSocket.data.name });
+      console.log(`[wait] ${name} waits for host in ${r}`);
+      return;
+    }
+    admit(socket);
+    reply({ ok: true, ...joinPayload(socket, info) });
   });
 
+  /* ---------------------------------------------------- host controls */
+
+  // Host lets a waiting person in (or turns them away).
+  socket.on('admit', ({ id, allow } = {}) => {
+    if (!isHost(socket) || !id) return;
+    const info = rooms.get(socket.data.room);
+    if (!info.waiting.has(id)) return;
+    const target = io.sockets.sockets.get(id);
+    if (!target) { info.waiting.delete(id); return; }
+    if (allow) {
+      admit(target);
+      target.emit('admitted', joinPayload(target, info));
+    } else {
+      info.waiting.delete(id);
+      target.emit('denied', { by: socket.data.name });
+      target.disconnect(true);
+    }
+  });
+
+  // Host removes a participant: they are told why, then disconnected.
+  socket.on('kick', ({ id } = {}) => {
+    if (!isHost(socket) || !id || id === socket.id) return;
+    const info = rooms.get(socket.data.room);
+    if (!info.members.has(id)) return;
+    const target = io.sockets.sockets.get(id);
+    console.log(`[kick] ${socket.data.name} removed ${info.members.get(id)?.name} from ${socket.data.room}`);
+    if (target) {
+      target.emit('kicked', { by: socket.data.name });
+      target.disconnect(true); // their disconnect -> leave() -> peer-left for everyone
+    } else {
+      info.members.delete(id);
+    }
+  });
+
+  // Host locks/unlocks the room for new joins.
+  socket.on('lock', ({ locked } = {}) => {
+    if (!isHost(socket)) return;
+    const info = rooms.get(socket.data.room);
+    info.locked = !!locked;
+    io.to(socket.data.room).emit('room-info', roomInfo(info));
+  });
+
+  // Host toggles "require approval for new people".
+  socket.on('approval', ({ enabled } = {}) => {
+    if (!isHost(socket)) return;
+    const info = rooms.get(socket.data.room);
+    info.approval = !!enabled;
+    io.to(socket.data.room).emit('room-info', roomInfo(info));
+    if (!info.approval) {
+      // Let everyone who is currently waiting straight in.
+      for (const id of [...info.waiting.keys()]) {
+        const t = io.sockets.sockets.get(id);
+        if (!t) { info.waiting.delete(id); continue; }
+        admit(t);
+        t.emit('admitted', joinPayload(t, info));
+      }
+    }
+  });
+
+  /* --------------------------------------------------------- relaying */
+
+  const inRoom = () => socket.data.room && !socket.data.waiting;
+
   socket.on('signal', ({ to, data } = {}) => {
-    if (!room || !to || !data) return;
-    // Only relay to sockets that share the room.
-    const members = rooms.get(room);
-    if (!members || !members.has(to)) return;
+    if (!inRoom() || !to || !data) return;
+    const info = rooms.get(socket.data.room);
+    if (!info?.members.has(to)) return; // only relay inside the room
     io.to(to).emit('signal', { from: socket.id, data });
   });
 
   socket.on('chat', (msg = {}) => {
-    if (!room) return;
+    if (!inRoom()) return;
     const text = clean(msg.text, 2000);
     if (!text) return;
-    io.to(room).emit('chat', { from: socket.id, name: socket.data.name, text, ts: Date.now() });
+    io.to(socket.data.room).emit('chat', { from: socket.id, name: socket.data.name, text, ts: Date.now() });
   });
 
   socket.on('caption', (cap = {}) => {
-    if (!room) return;
+    if (!inRoom()) return;
     const text = clean(cap.text, 4000);
     if (!text) return;
-    socket.to(room).emit('caption', {
-      from: socket.id,
-      name: socket.data.name,
-      text,
-      ts: Number(cap.ts) || Date.now(),
-    });
+    socket.to(socket.data.room).emit('caption', { from: socket.id, name: socket.data.name, text, ts: Number(cap.ts) || Date.now() });
   });
 
   socket.on('state', (s = {}) => {
-    if (!room) return;
+    if (!inRoom()) return;
     const safe = {};
     for (const k of ['audio', 'video', 'hand', 'screen', 'recording']) {
       if (typeof s[k] === 'boolean') safe[k] = s[k];
     }
-    socket.to(room).emit('state', { from: socket.id, ...safe });
+    socket.to(socket.data.room).emit('state', { from: socket.id, ...safe });
   });
 
   function leave() {
+    const room = socket.data.room;
     if (!room) return;
-    const members = rooms.get(room);
-    if (members) {
-      members.delete(socket.id);
-      if (members.size === 0) rooms.delete(room);
+    const info = rooms.get(room);
+    if (info) {
+      if (socket.data.waiting) {
+        info.waiting.delete(socket.id);
+        const host = info.hostId && io.sockets.sockets.get(info.hostId);
+        host?.emit('knock-cancel', { id: socket.id });
+      } else {
+        info.members.delete(socket.id);
+        socket.to(room).emit('peer-left', { id: socket.id, name: socket.data.name });
+        // Host left: hand the role to whoever joined next.
+        if (info.hostId === socket.id) {
+          info.hostId = [...info.members.entries()].sort((a, b) => a[1].joinedAt - b[1].joinedAt)[0]?.[0] || null;
+          if (info.hostId) {
+            io.to(room).emit('room-info', roomInfo(info));
+            // Pending knocks now belong to the new host.
+            const newHost = io.sockets.sockets.get(info.hostId);
+            for (const [id, w] of info.waiting) newHost?.emit('knock', { id, name: w.name });
+          }
+        }
+        console.log(`[leave] ${socket.data.name} <- ${room}`);
+      }
+      if (info.members.size === 0 && info.waiting.size === 0) rooms.delete(room);
     }
-    socket.to(room).emit('peer-left', { id: socket.id, name: socket.data.name });
     socket.leave(room);
-    console.log(`[leave] ${socket.data.name} <- ${room}`);
-    room = null;
+    socket.data.room = null;
+    socket.data.waiting = false;
   }
 
   socket.on('leave', leave);
   socket.on('disconnect', leave);
 });
+
 
 server.listen(PORT, () => {
   console.log(`TeamMeet running  ->  http://localhost:${PORT}`);

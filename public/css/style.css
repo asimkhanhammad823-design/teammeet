@@ -222,6 +222,16 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .people .st svg { width: 16px; height: 16px; }
 .people .st .off { color: var(--danger); }
 .people .st .rec { color: var(--danger); }
+.people .st .kick { color: var(--danger); margin-left: 4px; }
+.people .st .kick svg { width: 14px; height: 14px; }
+.people .pn small.host { color: var(--accent); font-weight: 600; }
+.people.waiting { border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.people .section-title { font-size: 12px; color: var(--warn); font-weight: 700; padding: 6px 10px 2px; text-transform: uppercase; letter-spacing: .04em; }
+.host-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.host-tag { color: var(--accent); font-weight: 700; }
+.switch { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; font-size: 13px; }
+.switch input { width: auto; accent-color: var(--accent); margin: 0; }
+.toast.knock b { color: #fde68a; }
 
 .tr-toolbar { display: flex; gap: 8px; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); }
 .tr-toolbar select { padding: 6px 10px; font-size: 13px; }
