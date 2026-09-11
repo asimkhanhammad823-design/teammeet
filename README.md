@@ -1,5 +1,15 @@
 # TeamMeet
 
+**Live links for this install**
+
+| | Link | Notes |
+|---|---|---|
+| ☁️ Cloud (always on, PC can be off) | `https://teammeet-g0vt.onrender.com/r/<room>` | Render free tier; first visit after 15 min idle takes ~30–50 s |
+| 💻 From this PC | `https://brick-ragged-moneybags.ngrok-free.dev/r/<room>` | ngrok permanent domain; server auto-starts at Windows logon |
+| 🏠 Same Wi‑Fi | `https://192.168.100.16:3443/r/<room>` | No internet needed; accept the certificate warning once |
+
+Cloud redeploy after code changes: push to GitHub, then Render dashboard → **Manual Deploy → Deploy latest commit** (the repo is connected as a public URL, so it does not auto-deploy).
+
 Free, self-hosted team video meetings — **unlimited length**, **full-meeting recording**, **live speaker-labelled transcript**. Zero running cost: audio/video goes peer-to-peer, recording is saved on your own disk, transcription uses the browser's built-in engine.
 
 ## Features
