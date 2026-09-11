@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>TeamMeet — free team meetings with recording & transcript</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234f8cff'/%3E%3Cpath d='M14 22a4 4 0 0 1 4-4h20a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4z' fill='%23fff'/%3E%3Cpath d='M44 28l8-5v18l-8-5z' fill='%23fff'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- Icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></symbol>
+    <symbol id="i-mic-off" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></symbol>
+    <symbol id="i-video-off" viewBox="0 0 24 24"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+    <symbol id="i-screen" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></symbol>
+    <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+    <symbol id="i-cc" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9.5a2.5 2.5 0 0 0-4 0v5a2.5 2.5 0 0 0 4 0M18 9.5a2.5 2.5 0 0 0-4 0v5a2.5 2.5 0 0 0 4 0"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="i-leave" viewBox="0 0 24 24"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  </defs>
+</svg>
+
+<!-- ============================== LOBBY ============================== -->
+<section id="lobby" class="view">
+  <div class="lobby-card">
+    <div class="lobby-preview">
+      <video id="preview" autoplay playsinline muted></video>
+      <div id="previewOff" class="preview-off hidden">Camera off</div>
+      <div class="preview-actions">
+        <button id="pvMic" class="ctl small" title="Mute / unmute"><svg><use href="#i-mic"/></svg></button>
+        <button id="pvCam" class="ctl small" title="Camera on / off"><svg><use href="#i-video"/></svg></button>
+      </div>
+    </div>
+
+    <div class="lobby-form">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <h1>TeamMeet</h1>
+      </div>
+      <p class="muted">Free team meetings with full-length recording &amp; live transcript. Nothing leaves your devices.</p>
+
+      <label>Your name
+        <input id="name" type="text" maxlength="40" placeholder="e.g. Aasim" autocomplete="name" />
+      </label>
+
+      <label>Room code
+        <div class="row">
+          <input id="room" type="text" maxlength="48" placeholder="team-standup" spellcheck="false" />
+          <button id="btnNewRoom" class="btn ghost icon" title="Generate a new room"><svg><use href="#i-refresh"/></svg></button>
+        </div>
+      </label>
+
+      <div class="invite">
+        <div class="invite-head"><span>Invite link — send this to your team</span><em id="inviteStatus">getting public link…</em></div>
+        <div class="row">
+          <input id="inviteLink" type="text" readonly spellcheck="false" />
+          <button id="btnInviteCopy" class="btn primary icon" title="Copy invite link"><svg><use href="#i-copy"/></svg></button>
+          <a id="btnInviteWa" class="btn ghost icon" title="Share on WhatsApp" target="_blank" rel="noopener"><svg><use href="#i-share"/></svg></a>
+        </div>
+        <div id="lanRow" class="lan-row hidden">
+          <span class="lan-label">Same Wi‑Fi (no internet needed):</span>
+          <code id="lanLink"></code>
+          <button id="btnLanCopy" class="btn ghost tiny" title="Copy LAN link"><svg><use href="#i-copy"/></svg></button>
+        </div>
+        <p id="inviteHint" class="invite-hint hidden"></p>
+      </div>
+
+      <div class="grid2">
+        <label>Microphone
+          <select id="selMic"></select>
+        </label>
+        <label>Camera
+          <select id="selCam"></select>
+        </label>
+        <label>Transcript language
+          <select id="selLang"></select>
+        </label>
+        <label>Recording quality
+          <select id="selQuality">
+            <option value="720">720p · ~1.1 GB/hour</option>
+            <option value="1080">1080p · ~2 GB/hour</option>
+            <option value="540">540p · ~0.6 GB/hour</option>
+          </select>
+        </label>
+      </div>
+
+      <p id="lobbyError" class="error hidden"></p>
+      <button id="btnJoin" class="btn primary big">Join meeting</button>
+      <p class="hint">Best in Chrome or Edge (recording &amp; transcript). Share the link after joining.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= MEETING ============================= -->
+<section id="meeting" class="view hidden">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="brand-dot"></span>
+      <strong id="roomTitle">room</strong>
+      <button id="btnCopy" class="btn ghost tiny" title="Copy invite link"><svg><use href="#i-link"/></svg><span>Copy link</span></button>
+    </div>
+    <div class="topbar-right">
+      <span id="recBadge" class="rec-badge hidden"><i></i><span id="recTime">00:00:00</span><em id="recSize"></em></span>
+      <span id="timer" class="timer">00:00:00</span>
+    </div>
+  </header>
+
+  <div class="body">
+    <main class="stage">
+      <div id="grid" class="grid" style="--cols:1"></div>
+      <div id="captions" class="captions"></div>
+    </main>
+
+    <aside id="side" class="side hidden">
+      <nav class="tabs">
+        <button data-tab="chat" class="active">Chat <b id="chatUnread" class="badge hidden">0</b></button>
+        <button data-tab="people">People <b id="peopleCount" class="badge">1</b></button>
+        <button data-tab="transcript">Transcript</button>
+        <button id="btnCloseSide" class="ctl small ghost" title="Close"><svg><use href="#i-x"/></svg></button>
+      </nav>
+
+      <section id="tab-chat" class="tab active">
+        <div id="chatList" class="chat-list"></div>
+        <form id="chatForm" class="chat-form" autocomplete="off">
+          <input id="chatInput" type="text" placeholder="Type a message…" maxlength="2000" />
+          <button type="submit" class="ctl small" title="Send"><svg><use href="#i-send"/></svg></button>
+        </form>
+      </section>
+
+      <section id="tab-people" class="tab">
+        <ul id="peopleList" class="people"></ul>
+      </section>
+
+      <section id="tab-transcript" class="tab">
+        <div class="tr-toolbar">
+          <select id="trLang" title="My transcription language"></select>
+          <span id="trStatus" class="tr-status">off</span>
+        </div>
+        <div id="trList" class="tr-list"></div>
+        <div class="tr-actions">
+          <button id="trTxt" class="btn ghost tiny"><svg><use href="#i-download"/></svg>TXT</button>
+          <button id="trSrt" class="btn ghost tiny"><svg><use href="#i-download"/></svg>SRT</button>
+          <button id="trJson" class="btn ghost tiny"><svg><use href="#i-download"/></svg>JSON</button>
+          <button id="trCopy" class="btn ghost tiny"><svg><use href="#i-copy"/></svg>Copy</button>
+          <button id="trClear" class="btn ghost tiny danger-text"><svg><use href="#i-trash"/></svg></button>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <footer class="controls">
+    <div class="controls-group">
+      <button id="btnMic" class="ctl" title="Mute (M)"><svg class="on"><use href="#i-mic"/></svg><svg class="off"><use href="#i-mic-off"/></svg></button>
+      <button id="btnCam" class="ctl" title="Camera (V)"><svg class="on"><use href="#i-video"/></svg><svg class="off"><use href="#i-video-off"/></svg></button>
+      <button id="btnScreen" class="ctl" title="Share screen (S)"><svg><use href="#i-screen"/></svg></button>
+      <button id="btnRecord" class="ctl" title="Record meeting (R)"><svg class="on"><use href="#i-record"/></svg><svg class="off"><use href="#i-stop"/></svg></button>
+      <button id="btnCC" class="ctl" title="Live transcript (C)"><svg><use href="#i-cc"/></svg></button>
+      <button id="btnHand" class="ctl" title="Raise hand (H)"><svg><use href="#i-hand"/></svg></button>
+    </div>
+    <div class="controls-group">
+      <button id="btnChat" class="ctl" data-open="chat" title="Chat"><svg><use href="#i-chat"/></svg><b id="chatDot" class="dot hidden"></b></button>
+      <button id="btnPeople" class="ctl" data-open="people" title="People"><svg><use href="#i-users"/></svg></button>
+      <button id="btnTranscript" class="ctl" data-open="transcript" title="Transcript"><svg><use href="#i-text"/></svg></button>
+      <button id="btnLeave" class="ctl danger" title="Leave"><svg><use href="#i-leave"/></svg></button>
+    </div>
+  </footer>
+</section>
+
+<div id="toasts" class="toasts"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

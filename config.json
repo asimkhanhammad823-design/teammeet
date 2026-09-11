@@ -1,0 +1,6 @@
+{
+  "NGROK_DOMAIN": "brick-ragged-moneybags.ngrok-free.dev",
+  "PUBLIC_URL": "",
+  "MAX_PEERS": "20",
+  "TUNNEL": "1"
+}

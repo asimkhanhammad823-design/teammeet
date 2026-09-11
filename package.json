@@ -1,0 +1,19 @@
+{
+  "name": "teammeet",
+  "version": "1.0.0",
+  "description": "Free, self-hosted team video meetings with local recording and live transcript (WebRTC, zero cost).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "selfsigned": "^2.4.1",
+    "socket.io": "^4.8.1"
+  }
+}
